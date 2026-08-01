@@ -45,6 +45,7 @@ from utils import (
     find_working_webcam,
     format_detection_history,
     format_stats_dataframe,
+    frame_to_base64_html,
     frame_to_pil,
     get_video_properties,
     open_video_capture,
@@ -81,7 +82,7 @@ def _init_session_state() -> None:
         "webcam_cap": None,           # cv2.VideoCapture kept alive across reruns
         "webcam_fps_counter": None,   # FPSCounter kept alive across reruns
         "webcam_frame_idx": 0,
-        "webcam_last_frame_rgb": None,    # last annotated frame (RGB numpy) for display after stop
+        "webcam_last_frame_html": None,    # last annotated frame as base64 HTML for display after stop
         "webcam_class_counts": {},
         # Shared metrics
         "detection_history": [],
@@ -347,7 +348,7 @@ def update_analytics(
 
     df_hist = format_detection_history(st.session_state.detection_history)
     if not df_hist.empty:
-        hist_ph.dataframe(df_hist, use_container_width=True, hide_index=True)
+        hist_ph.dataframe(df_hist, hide_index=True)
     else:
         hist_ph.info("Detection history will appear here.")
 
@@ -384,8 +385,8 @@ def run_webcam_mode(settings: Dict) -> None:
     col_vid, col_ctrl = st.columns([3, 1])
 
     with col_ctrl:
-        start_btn = st.button("▶ Start Detection", key="start_webcam", use_container_width=True)
-        stop_btn  = st.button("⏹ Stop Detection",  key="stop_webcam",  use_container_width=True)
+        start_btn = st.button("▶ Start Detection", key="start_webcam")
+        stop_btn  = st.button("⏹ Stop Detection",  key="stop_webcam")
 
         if start_btn and not st.session_state.running:
             st.session_state.running = True
@@ -415,10 +416,10 @@ def run_webcam_mode(settings: Dict) -> None:
 
     # ── Stopped state — show last annotated frame if available ──────────────
     if not st.session_state.running:
-        last = st.session_state.get("webcam_last_frame_rgb")
-        if last is not None:
-            frame_ph.image(last, use_container_width=True,
-                           caption="Last captured frame (detection stopped)")
+        last_html = st.session_state.get("webcam_last_frame_html")
+        if last_html is not None:
+            frame_ph.markdown(last_html, unsafe_allow_html=True)
+            st.caption("Last captured frame (detection stopped)")
             # Restore metrics from saved state
             _update_metrics(
                 ph_fps, ph_inf, ph_active, ph_unique,
@@ -498,17 +499,17 @@ def run_webcam_mode(settings: Dict) -> None:
     if settings["show_fps"]:
         annotated = draw_fps_overlay(annotated, fps_counter.fps, result.inference_ms)
 
-    # ── Convert to PIL — avoids Streamlit MediaFileStorageError ─────────────
-    # Using a PIL Image object is more stable than a raw numpy array when
-    # st.rerun() fires rapidly, because PIL images are encoded synchronously
-    # before the rerun starts, preventing cache-miss errors in the browser.
-    pil_frame = frame_to_pil(annotated)  # RGB PIL Image
+    # ── Encode as base64 HTML — bypasses MediaFileStorageError completely ──────
+    # st.image() stores frames in Streamlit's media cache.  When st.rerun()
+    # fires before the browser GETs the image, the cache evicts it and the
+    # browser gets a 404.  Embedding as a data-URL avoids this entirely.
+    html_frame = frame_to_base64_html(annotated, quality=75)
 
-    # ── Persist last frame for display after stop ─────────────────────────────
-    st.session_state.webcam_last_frame_rgb = pil_frame
+    # ── Persist encoded frame for display after stop ─────────────────────────────
+    st.session_state.webcam_last_frame_html = html_frame
 
     # ── Display ───────────────────────────────────────────────────────────────
-    frame_ph.image(pil_frame, use_container_width=True)
+    frame_ph.markdown(html_frame, unsafe_allow_html=True)
 
     # ── Update cumulative class counts ────────────────────────────────────────
     cc = st.session_state.webcam_class_counts
@@ -567,8 +568,8 @@ def run_video_mode(settings: Dict) -> None:
     col_vid, col_ctrl = st.columns([3, 1])
 
     with col_ctrl:
-        process_btn = st.button("▶ Process Video", key="process_video", use_container_width=True)
-        stop_btn = st.button("⏹ Stop", key="stop_video", use_container_width=True)
+        process_btn = st.button("▶ Process Video", key="process_video")
+        stop_btn = st.button("⏹ Stop", key="stop_video")
 
         if stop_btn:
             st.session_state.running = False
@@ -646,10 +647,13 @@ def run_video_mode(settings: Dict) -> None:
 
                 vw.write(annotated)
 
-                # Preview every 3 frames
+                # Preview every 3 frames via base64 to avoid cache errors
                 if frame_idx % 3 == 0:
                     display_frame = resize_frame(annotated, max_width=960)
-                    frame_ph.image(bgr_to_rgb(display_frame), channels="RGB", use_container_width=True)
+                    frame_ph.markdown(
+                        frame_to_base64_html(display_frame, quality=75),
+                        unsafe_allow_html=True,
+                    )
 
                 # Metrics every 10 frames
                 if frame_idx % 10 == 0:
@@ -688,7 +692,6 @@ def run_video_mode(settings: Dict) -> None:
                 data=f,
                 file_name=output_path.name,
                 mime="video/mp4",
-                use_container_width=True,
             )
 
 
@@ -721,9 +724,9 @@ def run_image_mode(settings: Dict) -> None:
 
     with col_orig:
         st.markdown("**Original**")
-        st.image(pil_img, use_container_width=True)
+        st.image(pil_img)
 
-    process_btn = st.button("🔍 Run Detection", key="run_image_detect", use_container_width=False)
+    process_btn = st.button("🔍 Run Detection", key="run_image_detect")
 
     if not process_btn:
         return
@@ -747,7 +750,7 @@ def run_image_mode(settings: Dict) -> None:
 
     with col_ann:
         st.markdown("**Annotated**")
-        st.image(bgr_to_rgb(annotated), use_container_width=True)
+        st.image(frame_to_pil(annotated), width=None)
 
     # ── Metrics ──
     if settings["show_stats"]:
@@ -762,7 +765,7 @@ def run_image_mode(settings: Dict) -> None:
             st.markdown("#### Class Breakdown")
             df = format_stats_dataframe(result.class_counts)
             st.bar_chart(df.set_index("Class"))
-            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.dataframe(df, hide_index=True)
 
     # ── Save & download ──
     try:
@@ -774,7 +777,6 @@ def run_image_mode(settings: Dict) -> None:
                 data=f,
                 file_name=out_path.name,
                 mime="image/png",
-                use_container_width=False,
             )
     except Exception as exc:
         st.warning(f"⚠️ Could not save image: {exc}")

@@ -16,7 +16,9 @@ Exports:
 
 from __future__ import annotations
 
+import base64
 import collections
+import io
 import logging
 import time
 from contextlib import contextmanager
@@ -379,6 +381,43 @@ def bgr_to_rgb(frame: np.ndarray) -> np.ndarray:
 def frame_to_pil(frame: np.ndarray) -> Image.Image:
     """Convert a BGR OpenCV frame to a PIL Image (RGB)."""
     return Image.fromarray(bgr_to_rgb(frame))
+
+
+def frame_to_base64_html(
+    frame: np.ndarray,
+    quality: int = 80,
+    border_radius: str = "12px",
+) -> str:
+    """
+    Encode a BGR frame as a JPEG data-URL and return an HTML ``<img>`` tag.
+
+    Using a base64 data-URL completely bypasses Streamlit's media-file
+    storage system, eliminating the ``MediaFileStorageError`` that occurs
+    when ``st.rerun()`` evicts cached images before the browser fetches them.
+
+    Parameters
+    ----------
+    frame : np.ndarray
+        BGR image (H, W, 3).
+    quality : int
+        JPEG compression quality (1-95).  Lower = smaller payload, faster.
+    border_radius : str
+        CSS border-radius for the ``<img>`` element.
+
+    Returns
+    -------
+    str
+        A self-contained HTML string ready for ``st.markdown(..., unsafe_allow_html=True)``.
+    """
+    pil = frame_to_pil(frame)          # BGR → RGB PIL Image
+    buf = io.BytesIO()
+    pil.save(buf, format="JPEG", quality=quality)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return (
+        f'<img src="data:image/jpeg;base64,{b64}" '
+        f'style="width:100%;border-radius:{border_radius};'
+        f'border:1px solid rgba(108,99,255,0.25);display:block;">'
+    )
 
 
 def timestamp_filename(stem: str, ext: str) -> str:
