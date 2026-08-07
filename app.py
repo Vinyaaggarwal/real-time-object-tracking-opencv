@@ -724,7 +724,7 @@ def run_image_mode(settings: Dict) -> None:
 
     with col_orig:
         st.markdown("**Original**")
-        st.image(pil_img)
+        st.image(pil_img, width='stretch')
 
     process_btn = st.button("🔍 Run Detection", key="run_image_detect")
 
@@ -750,7 +750,7 @@ def run_image_mode(settings: Dict) -> None:
 
     with col_ann:
         st.markdown("**Annotated**")
-        st.image(frame_to_pil(annotated), width=None)
+        st.image(frame_to_pil(annotated), width='stretch')
 
     # ── Metrics ──
     if settings["show_stats"]:
