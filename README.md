@@ -13,17 +13,17 @@ Supports **webcam streams**, **video file upload**, and **static image processin
 
 ## 📸 Screenshots
 
-### Home Dashboard
-![Home Dashboard](screenshots/home.png)
+### 📷 Webcam Detection
+![Webcam Detection 1](screenshots/webcam1.png)
+![Webcam Detection 2](screenshots/webcam2.png)
 
-### Webcam Detection
-![Webcam Detection](screenshots/webcam_detection.png)
+### 🎬 Video Tracking
+![Video Tracking 1](screenshots/upload_videos1.png)
+![Video Tracking 2](screenshots/upload_videos2.png)
 
-### Video Tracking
-![Video Tracking](screenshots/video_tracking.png)
-
-### Image Detection
-![Image Detection](screenshots/image_detection.png)
+### 🖼️ Image Detection
+![Image Detection 1](screenshots/upload_images1.png)
+![Image Detection 2](screenshots/upload_images2.png)
 
 ---
 
